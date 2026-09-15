@@ -41,3 +41,6 @@ app.get('/ping-db', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Servidor da API Solidária rodando na porta ${PORT}`);
 });
+
+const authRoutes = require('./routes/authRoutes');
+app.use('/api/auth', authRoutes);
