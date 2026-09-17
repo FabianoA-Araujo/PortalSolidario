@@ -1,0 +1,10 @@
+# Ignora node_modules em qualquer subpasta do projeto (backend, frontend, etc)
+**/node_modules/
+
+# Variáveis de Ambiente
+.env
+.env.*
+
+# Logs
+logs
+*.log
