@@ -53,7 +53,10 @@ module.exports = {
   // Busca a agenda Com JOIN para trazer os nomes
   async getAll(req, res) {
     try {
-      const query = `
+      // Pega o ID e o Papel de quem fez a requisição (injetado pelo token)
+      const { id, role } = req.user; 
+
+      let query = `
         SELECT 
           a.id, 
           a.scheduled_at, 
@@ -65,9 +68,19 @@ module.exports = {
         FROM appointments a
         JOIN clients c ON a.client_id = c.id
         JOIN services s ON a.service_id = s.id
-        ORDER BY a.scheduled_at ASC
       `;
-      const result = await db.query(query);
+      let params = [];
+
+      // Se for cliente, filtra para mostrar apenas os agendamentos dele
+      if (role === 'CLIENT') {
+        query += ` WHERE a.client_id = $1 ORDER BY a.scheduled_at ASC`;
+        params = [id];
+      } else {
+        // Se for equipe, mostra tudo
+        query += ` ORDER BY a.scheduled_at ASC`;
+      }
+
+      const result = await db.query(query, params);
       res.json(result.rows);
     } catch (error) {
       console.error('Erro ao buscar agenda:', error);
@@ -75,7 +88,7 @@ module.exports = {
     }
   },
 
-    // Altera o status do agendamento
+  // Altera o status do agendamento
   async updateStatus(req, res) {
     try {
       const { id } = req.params;

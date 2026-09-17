@@ -19,7 +19,7 @@ Esta documentação descreve os endpoints da API do Portal Solidário, seus resp
 ### 3. Gestão de Calendário (`holidays`)
 | Método | Endpoint | Descrição | Acesso |
 | :--- | :--- | :--- | :--- |
-| **GET** | `/api/holidays` | Retorna um array com todas as datas bloqueadas para o React desabilitar. | Público |
+| **GET** | `/api/holidays` | Retorna um array com todas as datas bloqueadas para o React desabilitar. | Autenticado |
 | **POST** | `/api/holidays` | Bloqueia um dia específico no calendário (Feriados ou imprevistos). | Admin |
 | **DELETE** | `/api/holidays/:id` | Remove o bloqueio de uma data, liberando a vaga no sistema. | Admin |
 
