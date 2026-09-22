@@ -1,0 +1,8 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Para que o fundo ocupe sempre a tela inteira */
+body {
+  @apply bg-petroleo-900 text-cinza-200 antialiased h-screen w-full;
+}
