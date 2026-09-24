@@ -30,7 +30,14 @@ module.exports = {
   // Busca todas as datas bloqueadas
   async getAll(req, res) {
     try {
-      const result = await db.query('SELECT * FROM holidays ORDER BY blocked_date ASC');
+      const result = await db.query(`
+        SELECT 
+          h.*, 
+          u.name AS creator_name 
+        FROM holidays h
+        LEFT JOIN users u ON h.user_id = u.id
+        ORDER BY h.blocked_date ASC
+      `);
       res.json(result.rows);
     } catch (error) {
       console.error('Erro ao buscar datas bloqueadas:', error);

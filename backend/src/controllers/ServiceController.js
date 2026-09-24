@@ -5,12 +5,12 @@ module.exports = {
   async create(req, res) {
     try {
       // Pega os dados que vieram no corpo da requisição
-      const { name, description, duration_minutes } = req.body;
+      const { name, description, duration_minutes, target_audience } = req.body;
       
       // Executa o SQL
       const result = await db.query(
-        'INSERT INTO services (name, description, duration_minutes) VALUES ($1, $2, $3) RETURNING *',
-        [name, description, duration_minutes]
+        'INSERT INTO services (name, description, duration_minutes, target_audience) VALUES ($1, $2, $3, $4) RETURNING *',
+        [name, description, duration_minutes, target_audience]
       );
 
       // Devolve o serviço criado com status 201 (Created)
@@ -24,7 +24,7 @@ module.exports = {
   // Busca todos os serviços
   async getAll(req, res) {
     try {
-      const result = await db.query('SELECT * FROM services ORDER BY name ASC');
+      const result = await db.query('SELECT id, name, description, duration_minutes, target_audience FROM services ORDER BY name ASC');
       res.json(result.rows);
     } catch (error) {
       console.error('Erro ao buscar serviços:', error);
