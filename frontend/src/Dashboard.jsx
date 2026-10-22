@@ -266,13 +266,15 @@ function Dashboard() {
     }
   };
 
-  // Dispara as buscas automaticamente toda vez que o ADMIN clicar na aba "Gestão"
+  // Dispara as buscas sempre que clicar na aba
   useEffect(() => {
+    fetchAppointments();
+
     if (activeTab === 'management') {
-      fetchAppointments();
       fetchStaff();
     }
   }, [activeTab]);
+
   const fetchAppointments = async () => {
     try {
       const token = localStorage.getItem('@PortalSolidario:token');
@@ -392,13 +394,6 @@ function Dashboard() {
     setServiceFormDuration('');
     setServiceFormAudience('');
   };
-
-  // Dispara a busca automaticamente toda vez que o ADMIN clicar na aba "Gestão"
-//   useEffect(() => {
-//     if (activeTab === 'management') {
-//       fetchAppointments();
-//     }
-//   }, [activeTab]);
 
   const handleStatusChange = async (appointmentId, newStatus) => {
     const confirmChange = window.confirm('Deseja realmente alterar o status deste agendamento?');
