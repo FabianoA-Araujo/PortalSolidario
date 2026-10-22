@@ -27,37 +27,55 @@ function Dashboard() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [holidayReason, setHolidayReason] = useState('');
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+  const isSuperAdmin = user?.role === 'SUPERADMIN';
 
   // --- Estados da Aba de Gestão ---
   const [activeTab, setActiveTab] = useState('calendar');
   const [appointments, setAppointments] = useState([]);
+  const [staffList, setStaffList] = useState([]);
 
+  // --- Estados da Aba de Serviços ---
+  const [editingServiceId, setEditingServiceId] = useState(null);
+  const [serviceFormName, setServiceFormName] = useState('');
+  const [serviceFormDescription, setServiceFormDescription] = useState('');
+  const [serviceFormDuration, setServiceFormDuration] = useState('');
+  const [serviceFormAudience, setServiceFormAudience] = useState('');
+
+  // --- Estados da Aba de Gestão de Equipe (SuperAdmin) ---
+  const [staffMembers, setStaffMembers] = useState([]);
+  const [staffFormName, setStaffFormName] = useState('');
+  const [staffFormEmail, setStaffFormEmail] = useState('');
+  const [staffFormPassword, setStaffFormPassword] = useState('');
+  const [staffFormRole, setStaffFormRole] = useState('STAFF')  
 
   // Busca os serviços automaticamente quando o Dashboard carrega
   useEffect(() => {
-    const fetchServices = async () => {
-      try {
-        const API_URL = import.meta.env.VITE_API_URL;
-        const response = await fetch(`${API_URL}/services`);
-        if (response.ok) {
-          const data = await response.json();
-          setServices(data);
-        }
+      const fetchData = async () => {
+          try {
+              const API_URL = import.meta.env.VITE_API_URL;
+          
+              // 1. Busca Serviços
+              const resServices = await fetch(`${API_URL}/services`);
+              if (resServices.ok) setServices(await resServices.json());
 
-        const token = localStorage.getItem('@PortalSolidario:token');
-        const holidayResponse = await fetch(`${API_URL}/holidays`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (holidayResponse.ok) {
-          const holidayData = await holidayResponse.json();
-          // Garante que as dates stringifadas sejam interpretadas localmente e salvas no estado
-          setHolidays(holidayData); 
-        }
-      } catch (error) {
-        console.error('Erro ao buscar serviços:', error);
-      }
-    };
-    fetchServices();
+              // 2. Busca Feriados e Agendamentos (Requer Token)
+              const token = localStorage.getItem('@PortalSolidario:token');
+              if (token) {
+                  const headers = { 'Authorization': `Bearer ${token}` };
+                  
+                  const [resHolidays, resAppointments] = await Promise.all([
+                      fetch(`${API_URL}/holidays`, { headers }),
+                      fetch(`${API_URL}/appointments`, { headers })
+                  ]);
+                  
+                  if (resHolidays.ok) setHolidays(await resHolidays.json());
+                  if (resAppointments.ok) setAppointments(await resAppointments.json());
+              }
+          } catch (error) {
+              console.error('Erro ao buscar dados iniciais:', error);
+          }
+      };
+      fetchData();
   }, []);
 
   // Logout
@@ -96,16 +114,23 @@ function Dashboard() {
   };
 
   const getBlockInfo = (day) => {
-    if (getDay(day) === 0) return { isBlocked: true, reason: 'Fechado aos Domingos' };
+    if (getDay(day) === 0) return { isBlocked: true, reason: 'Fechado aos Domingos', type: 'system' };
     
     const dateString = format(day, 'yyyy-MM-dd');
+    
+    // Verifica Feriados
     const holiday = Array.isArray(holidays) 
       ? holidays.find(h => h?.date?.startsWith(dateString) || h?.blocked_date?.startsWith(dateString)) 
       : null;
-      
-    if (holiday) return { isBlocked: true, reason: holiday.description, id: holiday.id, creatorName: holiday.creator_name };
+    if (holiday) return { isBlocked: true, reason: holiday.description, id: holiday.id, creatorName: holiday.creator_name, type: 'holiday' };
     
-    return { isBlocked: false, reason: null, id: null, creatorName: null };
+    // Verifica Agenda Lotada, ou seja, 1 agendamento por dia que não esteja com status 
+    const booked = Array.isArray(appointments)
+      ? appointments.find(a => a?.scheduled_at?.startsWith(dateString) && a?.status !== 'CANCELED')
+      : null;
+    if (booked) return { isBlocked: true, reason: 'Agenda lotada', id: booked.id, creatorName: null, type: 'booked' };
+
+    return { isBlocked: false, reason: null, id: null, creatorName: null, type: 'free' };
   };
   
 
@@ -223,6 +248,31 @@ function Dashboard() {
   };
 
   // --- Ações de Admin ---
+
+  const fetchStaff = async () => {
+    try {
+      const token = localStorage.getItem('@PortalSolidario:token');
+      const API_URL = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${API_URL}/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // Guarda no estado apenas os usuários com a role STAFF
+        setStaffList(data.filter(u => u.role === 'STAFF'));
+      }
+    } catch (error) {
+      console.error('Erro ao buscar profissionais:', error);
+    }
+  };
+
+  // Dispara as buscas automaticamente toda vez que o ADMIN clicar na aba "Gestão"
+  useEffect(() => {
+    if (activeTab === 'management') {
+      fetchAppointments();
+      fetchStaff();
+    }
+  }, [activeTab]);
   const fetchAppointments = async () => {
     try {
       const token = localStorage.getItem('@PortalSolidario:token');
@@ -239,12 +289,116 @@ function Dashboard() {
     }
   };
 
-  // Dispara a busca automaticamente toda vez que o ADMIN clicar na aba "Gestão"
-  useEffect(() => {
-    if (activeTab === 'management') {
-      fetchAppointments();
+  // --- Ações de Gestão de Serviços ---
+  const handleSaveService = async (e) => {
+    e.preventDefault(); // Evita recarregar a página no submit do form
+    try {
+      const token = localStorage.getItem('@PortalSolidario:token');
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      const method = editingServiceId ? 'PUT' : 'POST';
+      const url = editingServiceId ? `${API_URL}/services/${editingServiceId}` : `${API_URL}/services`;
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: serviceFormName,
+          description: serviceFormDescription,
+          duration_minutes: parseInt(serviceFormDuration),
+          target_audience: serviceFormAudience
+        })
+      });
+
+      if (response.ok) {
+        const savedService = await response.json();
+        
+        // Atualiza a lista na tela imediatamente
+        if (editingServiceId) {
+          setServices(prev => prev.map(s => s.id === editingServiceId ? savedService : s));
+        } else {
+          setServices(prev => [...prev, savedService]);
+        }
+        
+        // Limpa o formulário
+        setServiceFormName('');
+        setServiceFormDuration('');
+        setServiceFormDescription('');
+        setServiceFormAudience('');
+        setEditingServiceId(null);
+        alert('Serviço salvo com sucesso!');
+      } else {
+        alert('Erro ao salvar serviço. Verifique os dados e tente novamente.');
+      }
+    } catch (error) {
+      console.error('Erro ao salvar serviço:', error);
     }
-  }, [activeTab]);
+  };
+
+  // --- Ações de Gestão de Equipe (Apenas SuperAdmin) ---
+  const handleSaveStaff = async (e) => {
+    e.preventDefault();
+    try {
+      const token = localStorage.getItem('@PortalSolidario:token');
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      const response = await fetch(`${API_URL}/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: staffFormName,
+          email: staffFormEmail,
+          password: staffFormPassword,
+          role: staffFormRole
+        })
+      });
+
+      if (response.ok) {
+        alert('Membro da equipe cadastrado com sucesso!');
+        // Limpa o formulário
+        setStaffFormName('');
+        setStaffFormEmail('');
+        setStaffFormPassword('');
+        setStaffFormRole('STAFF');
+        
+        // Se o seu backend tiver uma rota GET /users, poderíamos chamar uma função fetchStaff() aqui para atualizar a tabela.
+      } else {
+        const data = await response.json();
+        alert(data.error || 'Erro ao cadastrar membro da equipe.');
+      }
+    } catch (error) {
+      console.error('Erro ao salvar equipe:', error);
+    }
+  };
+
+  const handleEditServiceClick = (service) => {
+    setEditingServiceId(service.id);
+    setServiceFormName(service.name);
+    setServiceFormDescription('');
+    setServiceFormDescription(service.description || '');
+    setServiceFormDuration(service.duration_minutes);
+    setServiceFormAudience(service.target_audience);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingServiceId(null);
+    setServiceFormName('');
+    setServiceFormDuration('');
+    setServiceFormAudience('');
+  };
+
+  // Dispara a busca automaticamente toda vez que o ADMIN clicar na aba "Gestão"
+//   useEffect(() => {
+//     if (activeTab === 'management') {
+//       fetchAppointments();
+//     }
+//   }, [activeTab]);
 
   const handleStatusChange = async (appointmentId, newStatus) => {
     const confirmChange = window.confirm('Deseja realmente alterar o status deste agendamento?');
@@ -273,6 +427,71 @@ function Dashboard() {
       }
     } catch (error) {
       console.error('Erro ao mudar status:', error);
+    }
+  };
+
+const handleStaffAssign = async (appointmentId, staffId) => {
+    if (!staffId) return;
+
+    const selectedStaff = staffList.find(s => s.id === staffId);
+    const staffName = selectedStaff ? selectedStaff.name : 'este profissional';
+    const confirmAssign = window.confirm(`Tem certeza que deseja atribuir ${staffName} para realizar este serviço?`);
+  
+    if (!confirmAssign) return;
+
+    try {
+      const token = localStorage.getItem('@PortalSolidario:token');
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      const response = await fetch(`${API_URL}/appointments/${appointmentId}/staff`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ user_id: staffId }) 
+      });
+
+      if (response.ok) {
+        setAppointments(prev => 
+          prev.map(app => app.id === appointmentId ? { ...app, user_id: staffId } : app)
+        );
+      } else {
+        alert('Erro ao atribuir profissional.');
+      }
+    } catch (error) {
+      console.error('Erro ao atribuir profissional:', error);
+    }
+  };
+
+// Para o cliente cancelar o seu próprio agendamento
+  const handleClientCancel = async (appointmentId) => {
+    const confirmCancel = window.confirm('Tem certeza que deseja cancelar este agendamento?');
+    if (!confirmCancel) return;
+    
+    try {
+      const token = localStorage.getItem('@PortalSolidario:token');
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      const response = await fetch(`${API_URL}/appointments/${appointmentId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ status: 'CANCELED' })
+      });
+
+      if (response.ok) {
+        // Atualiza a tela instantaneamente
+        setAppointments(prev => 
+          prev.map(app => app.id === appointmentId ? { ...app, status: 'CANCELED' } : app)
+        );
+      } else {
+        alert('Erro ao cancelar o agendamento.');
+      }
+    } catch (error) {
+      console.error('Erro ao cancelar:', error);
     }
   };
 
@@ -309,8 +528,23 @@ return (
             >
               Gestão de Agendamentos
             </button>
+            <button 
+              onClick={() => setActiveTab('services')}
+              className={`font-semibold pb-2 px-4 border-b-2 transition-colors ${activeTab === 'services' ? 'border-cinza-200 text-white' : 'border-transparent text-cinza-400 hover:text-cinza-200'}`}
+            >
+              Catálogo de Serviços
+            </button>            
+            {isSuperAdmin && (
+              <button 
+                onClick={() => setActiveTab('staff')}
+                className={`font-semibold pb-2 px-4 border-b-2 transition-colors ${activeTab === 'staff' ? 'border-cinza-200 text-white' : 'border-transparent text-cinza-400 hover:text-cinza-200'}`}
+              >
+                Gestão de Equipe
+              </button>
+            )}  
           </div>
-        )}        
+        )}
+
         {/* ABA: CALENDÁRIO */}
         {activeTab === 'calendar' && (
         <div className="space-y-8 mt-8">
@@ -389,24 +623,24 @@ return (
 
                 {/* Renderização dos dias */}
                 {daysInMonth.map(day => {
-                const { isBlocked, reason } = getBlockInfo(day);
+                const { isBlocked, reason, type } = getBlockInfo(day);
                 const isSelected = selectedDate && isSameDay(day, selectedDate);
                 const isPast = isBefore(day, startOfToday());
                 
-                // Regra de Clique: Desabilita se for passado OR (bloqueado E não for Admin)
-                const isDisabled = isPast || (isBlocked && !isAdmin);
+                const isDisabled = isPast || type === 'system' || type === 'booked' || (type === 'holiday' && !isAdmin);
 
                 return (
                     <button
                     key={day.toString()}
                     onClick={() => !isDisabled && handleDateSelect(day)}
                     disabled={isDisabled}
-                    title={reason || ''} // Tooltip nativo
+                    title={reason || ''} 
                     className={`
                         py-2 rounded-md transition-colors text-sm font-medium
                         ${isPast ? 'opacity-30 cursor-not-allowed text-cinza-400' : 'hover:bg-petroleo-700 text-cinza-200'}
-                        ${isBlocked && !isPast ? 'bg-red-900/50 text-red-200 border border-red-800' : ''}
-                        ${isSelected ? 'bg-white text-petroleo-900 font-bold hover:bg-cinza-200 shadow-md border-0' : (!isBlocked ? 'bg-petroleo-900' : '')}
+                        ${isBlocked && !isPast && type === 'holiday' ? 'bg-red-900/50 text-red-200 border border-red-800' : ''}
+                        ${isBlocked && !isPast && type === 'booked' ? 'bg-yellow-900/50 text-yellow-200 border border-yellow-800 cursor-not-allowed opacity-70' : ''}
+                        ${isSelected ? 'bg-white text-petroleo-900 font-bold hover:bg-cinza-200 shadow-md border-0' : (type === 'free' ? 'bg-petroleo-900' : '')}
                     `}
                     >
                     {format(day, 'd')}
@@ -507,6 +741,7 @@ return (
                     <th className="px-6 py-4 font-medium">Data / Hora</th>
                     <th className="px-6 py-4 font-medium">Cliente</th>
                     <th className="px-6 py-4 font-medium">Serviço</th>
+                    <th className="px-6 py-4 font-medium">Profissional</th>
                     <th className="px-6 py-4 font-medium">Status</th>
                   </tr>
                 </thead>
@@ -528,6 +763,20 @@ return (
                         <td className="px-6 py-4 text-cinza-200">{app.service_name}</td>
                         <td className="px-6 py-4">
                           <select 
+                            value={app.user_id || ''}
+                            onChange={(e) => handleStaffAssign(app.id, e.target.value)}
+                            className="w-full px-3 py-1.5 bg-petroleo-900 border border-petroleo-700 rounded-md text-white text-xs focus:outline-none focus:ring-2 focus:ring-petroleo-700 cursor-pointer"
+                          >
+                            <option value="">Não atribuído</option>
+                            {staffList.map(staff => (
+                              <option key={staff.id} value={staff.id}>
+                                {staff.name}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-6 py-4">
+                          <select 
                             value={app.status} 
                             onChange={(e) => handleStatusChange(app.id, e.target.value)}
                             className={`px-3 py-1.5 rounded-md font-semibold text-xs border cursor-pointer focus:outline-none ${statusMap[app.status]?.color || statusMap['PENDING'].color}`}
@@ -546,8 +795,243 @@ return (
               </table>
             </div>
           </div>
-        )}        
+        )}
 
+        {/* ABA DE NAVEGAÇÃO PARA CLIENTE*/}
+        {!isAdmin && (
+          <div className="flex gap-4 mt-6 mb-6 border-b border-petroleo-700 pb-2">
+            <button 
+              onClick={() => setActiveTab('calendar')}
+              className={`font-semibold pb-2 px-4 border-b-2 transition-colors ${activeTab === 'calendar' ? 'border-cinza-200 text-white' : 'border-transparent text-cinza-400 hover:text-cinza-200'}`}
+            >
+              Agendar Serviço
+            </button>
+            <button 
+              onClick={() => setActiveTab('my_appointments')}
+              className={`font-semibold pb-2 px-4 border-b-2 transition-colors ${activeTab === 'my_appointments' ? 'border-cinza-200 text-white' : 'border-transparent text-cinza-400 hover:text-cinza-200'}`}
+            >
+              Meus Agendamentos
+            </button>
+          </div>
+        )}
+
+        {/* ABA MEUS AGENDAMENTOS (CLIENTE) */}
+        {activeTab === 'my_appointments' && !isAdmin && (
+          <div className="mt-8 bg-petroleo-800 rounded-lg border border-petroleo-700 shadow-lg p-6">
+            <h2 className="text-xl font-bold text-white mb-6">Meus Agendamentos</h2>
+            <div className="space-y-4">
+              {appointments.filter(app => app.client_id === user.id).length === 0 ? (
+                <p className="text-cinza-400">Você ainda não possui agendamentos.</p>
+              ) : (
+                appointments.filter(app => app.client_id === user.id).map(app => (
+                  <div key={app.id} className="flex flex-col sm:flex-row justify-between items-center p-4 bg-petroleo-900 border border-petroleo-700 rounded-md">
+                    <div>
+                      <p className="font-bold text-white capitalize">{format(new Date(app.scheduled_at), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}</p>
+                      <p className="text-cinza-400 text-sm">{app.service_name}</p>
+                      <span className={`inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-md ${statusMap[app.status]?.color}`}>
+                        {statusMap[app.status]?.label}
+                      </span>
+                    </div>
+                    
+                    {/* Exibe o botão de cancelar apenas se o agendamento ainda estiver ativo */}
+                    {app.status !== 'CANCELED' && app.status !== 'COMPLETED' && (
+                      <button 
+                        onClick={() => handleClientCancel(app.id)}
+                        className="mt-4 sm:mt-0 bg-red-900/50 hover:bg-red-800 text-red-200 border border-red-800 font-semibold py-2 px-4 rounded-md transition duration-200"
+                      >
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ABA GESTÃO DE SERVIÇOS (ADMIN) */}
+        {activeTab === 'services' && isAdmin && (
+          <div className="mt-8 space-y-8">
+            
+            {/* Formulário de Cadastro/Edição */}
+            <div className="bg-petroleo-800 rounded-lg border border-petroleo-700 shadow-lg p-6">
+              <h2 className="text-xl font-bold text-white mb-6">
+                {editingServiceId ? 'Editar Serviço' : 'Novo Serviço'}
+              </h2>
+              <form onSubmit={handleSaveService} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-cinza-200 mb-2">Nome do Serviço</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={serviceFormName}
+                    onChange={(e) => setServiceFormName(e.target.value)}
+                    placeholder="Ex: Corte de Cabelo Masculino"
+                    className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-petroleo-700"
+                  />
+                </div>
+                <div className="md:col-span-4 mt-2">
+                  <label className="block text-sm font-medium text-cinza-200 mb-2">Descrição do Serviço</label>
+                  <textarea 
+                    value={serviceFormDescription}
+                    onChange={(e) => setServiceFormDescription(e.target.value)}
+                    placeholder="Ex: Corte clássico na tesoura, com acabamento na navalha"
+                    rows="2"
+                    className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-petroleo-700 resize-none"
+                  ></textarea>
+                </div>                
+                <div>
+                  <label className="block text-sm font-medium text-cinza-200 mb-2">Duração (minutos)</label>
+                  <input 
+                    type="number" 
+                    required
+                    min="15"
+                    step="15"
+                    value={serviceFormDuration}
+                    onChange={(e) => setServiceFormDuration(e.target.value)}
+                    placeholder="Ex: 60"
+                    className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-petroleo-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-cinza-200 mb-2">Público-Alvo</label>
+                  <select 
+                    required
+                    value={serviceFormAudience}
+                    onChange={(e) => setServiceFormAudience(e.target.value)}
+                    className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-petroleo-700"
+                  >
+                    <option value="" disabled>Selecione...</option>
+                    <option value="Masculino">MASCULINO</option>
+                    <option value="Feminino">FEMININO</option>
+                    <option value="Geral">GERAL</option>
+                  </select>
+                </div>
+                <div className="md:col-span-4 flex gap-4 mt-4">
+                  <button 
+                    type="submit"
+                    className="bg-green-700 hover:bg-green-600 text-white font-semibold py-2 px-6 rounded-md transition duration-200"
+                  >
+                    {editingServiceId ? 'Salvar Alterações' : 'Cadastrar Serviço'}
+                  </button>
+                  {editingServiceId && (
+                    <button 
+                      type="button"
+                      onClick={handleCancelEdit}
+                      className="bg-petroleo-700 hover:bg-petroleo-600 text-white font-semibold py-2 px-6 rounded-md transition duration-200"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </form>
+            </div>
+
+            {/* Lista de Serviços */}
+            <div className="bg-petroleo-800 rounded-lg border border-petroleo-700 shadow-lg overflow-hidden">
+              <table className="w-full text-left text-sm text-cinza-200">
+                <thead className="bg-petroleo-900 text-cinza-400 border-b border-petroleo-700">
+                  <tr>
+                    <th className="px-6 py-4 font-medium">Serviço</th>
+                    <th className="px-6 py-4 font-medium">Duração</th>
+                    <th className="px-6 py-4 font-medium">Público</th>
+                    <th className="px-6 py-4 font-medium text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-petroleo-700">
+                  {services.length === 0 ? (
+                    <tr>
+                      <td colSpan="4" className="px-6 py-8 text-center text-cinza-400">Nenhum serviço cadastrado.</td>
+                    </tr>
+                  ) : (
+                    services.map(service => (
+                      <tr key={service.id} className="hover:bg-petroleo-700/50 transition-colors">
+                        <td className="px-6 py-4 font-bold text-white">{service.name}</td>
+                        <td className="px-6 py-4">{service.duration_minutes} min</td>
+                        <td className="px-6 py-4">{service.target_audience}</td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => handleEditServiceClick(service)}
+                            className="text-blue-400 hover:text-blue-300 font-semibold px-3 py-1 bg-blue-900/30 border border-blue-800 rounded-md transition-colors"
+                          >
+                            Editar
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ABA GESTÃO DE EQUIPE APENAS SUPERADMIN */}
+        {activeTab === 'staff' && isSuperAdmin && (
+          <div className="mt-8 space-y-8">
+            <div className="bg-petroleo-800 rounded-lg border border-petroleo-700 shadow-lg p-6">
+              <h2 className="text-xl font-bold text-white mb-6">Cadastrar Novo Membro da Equipe</h2>
+              
+              <form onSubmit={handleSaveStaff} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-cinza-200 mb-2">Nome Completo</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={staffFormName}
+                    onChange={(e) => setStaffFormName(e.target.value)}
+                    placeholder="Ex: João Barbeiro"
+                    className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-petroleo-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-cinza-200 mb-2">E-mail (Login)</label>
+                  <input 
+                    type="email" 
+                    required
+                    value={staffFormEmail}
+                    onChange={(e) => setStaffFormEmail(e.target.value)}
+                    placeholder="joao@salao.com"
+                    className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-petroleo-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-cinza-200 mb-2">Senha Provisória</label>
+                  <input 
+                    type="password" 
+                    required
+                    value={staffFormPassword}
+                    onChange={(e) => setStaffFormPassword(e.target.value)}
+                    placeholder="senha"
+                    className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-petroleo-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-cinza-200 mb-2">Nível de Acesso (Role)</label>
+                  <select 
+                    required
+                    value={staffFormRole}
+                    onChange={(e) => setStaffFormRole(e.target.value)}
+                    className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white focus:outline-none focus:ring-2 focus:ring-petroleo-700 cursor-pointer"
+                  >
+                    <option value="STAFF">STAFF (Realiza os serviços)</option>
+                    <option value="ADMIN">ADMIN (Gerencia agenda e bloqueios)</option>
+                  </select>
+                </div>
+                
+                <div className="md:col-span-2 mt-4">
+                  <button 
+                    type="submit"
+                    className="bg-green-700 hover:bg-green-600 text-white font-semibold py-3 px-8 rounded-md transition duration-200 shadow-md"
+                  >
+                    Cadastrar Usuário
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        
       </div>
     </div>
   );

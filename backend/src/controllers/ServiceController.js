@@ -36,11 +36,11 @@ module.exports = {
   async update(req, res) {
     try {
       const { id } = req.params; // Pega o ID que vem na URL
-      const { name, description, duration_minutes } = req.body;
+      const { name, description, duration_minutes, target_audience } = req.body;
 
       const result = await db.query(
-        'UPDATE services SET name = $1, description = $2, duration_minutes = $3 WHERE id = $4 RETURNING *',
-        [name, description, duration_minutes, id]
+        'UPDATE services SET name = $1, description = $2, duration_minutes = $3, target_audience = $4 WHERE id = $5 RETURNING *',
+        [name, description, duration_minutes, target_audience, id]
       );
 
       // Se o banco não retornou nenhuma linha, o ID não existe

@@ -27,12 +27,13 @@ module.exports = {
         return res.status(400).json({ error: 'Esta data está bloqueada ou é feriado.' });
       }
 
-      // Apenas 1 agendamento por dia
-      // Compara apenas a data (::date), ignorando a hora
+      // Apenas 1 agendamento por dia, ignorando os com status CANCELED
+      // Compara a data
       const existingAppointment = await db.query(
-        'SELECT id FROM appointments WHERE scheduled_at::date = $1::date',
+        "SELECT id FROM appointments WHERE scheduled_at::date = $1::date AND status != 'CANCELED'",
         [scheduled_at]
       );
+      
       if (existingAppointment.rowCount > 0) {
         return res.status(400).json({ error: 'Já existe um agendamento solidário preenchido para este dia.' });
       }
@@ -50,17 +51,18 @@ module.exports = {
     }
   },
 
-  // Busca a agenda Com JOIN para trazer os nomes
+  // Busca a agenda com JOIN para trazer os nomes e filtro de privacidade
   async getAll(req, res) {
     try {
-      // Pega o ID e o Papel de quem fez a requisição (injetado pelo token)
       const { id, role } = req.user; 
 
-      let query = `
+      const query = `
         SELECT 
           a.id, 
           a.scheduled_at, 
           a.status,
+          a.client_id,
+          a.user_id,
           c.name AS client_name,
           c.phone AS client_phone,
           s.name AS service_name,
@@ -68,20 +70,29 @@ module.exports = {
         FROM appointments a
         JOIN clients c ON a.client_id = c.id
         JOIN services s ON a.service_id = s.id
+        ORDER BY a.scheduled_at ASC
       `;
-      let params = [];
 
-      // Se for cliente, filtra para mostrar apenas os agendamentos dele
+      const result = await db.query(query);
+      let dataToSend = result.rows;
+
+      // 2. Filtro de Privacidade
       if (role === 'CLIENT') {
-        query += ` WHERE a.client_id = $1 ORDER BY a.scheduled_at ASC`;
-        params = [id];
-      } else {
-        // Se for equipe, mostra tudo
-        query += ` ORDER BY a.scheduled_at ASC`;
+        dataToSend = result.rows.map(app => {
+          // Se o agendamento não for deste cliente, limpa os dados sensíveis
+          if (app.client_id !== id) {
+            return {
+              id: app.id,
+              scheduled_at: app.scheduled_at,
+              status: app.status
+            };
+          }
+          // Se for dele, envia o objeto completo
+          return app;
+        });
       }
 
-      const result = await db.query(query, params);
-      res.json(result.rows);
+      res.json(dataToSend);
     } catch (error) {
       console.error('Erro ao buscar agenda:', error);
       res.status(500).json({ error: 'Erro interno do servidor' });
