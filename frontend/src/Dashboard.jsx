@@ -63,13 +63,9 @@ function Dashboard() {
               if (token) {
                   const headers = { 'Authorization': `Bearer ${token}` };
                   
-                  const [resHolidays, resAppointments] = await Promise.all([
-                      fetch(`${API_URL}/holidays`, { headers }),
-                      fetch(`${API_URL}/appointments`, { headers })
-                  ]);
+                  const resHolidays = await fetch(`${API_URL}/holidays`, { headers });
                   
                   if (resHolidays.ok) setHolidays(await resHolidays.json());
-                  if (resAppointments.ok) setAppointments(await resAppointments.json());
               }
           } catch (error) {
               console.error('Erro ao buscar dados iniciais:', error);
@@ -250,6 +246,8 @@ function Dashboard() {
   // --- Ações de Admin ---
 
   const fetchStaff = async () => {
+    // debug cronometro início
+    console.time('Tempo da API - Staff')
     try {
       const token = localStorage.getItem('@PortalSolidario:token');
       const API_URL = import.meta.env.VITE_API_URL;
@@ -263,6 +261,9 @@ function Dashboard() {
       }
     } catch (error) {
       console.error('Erro ao buscar profissionais:', error);
+    } finally{
+      // debug cronometro fim
+      console.timeEnd('Tempo da API - Staff')
     }
   };
 
@@ -276,6 +277,9 @@ function Dashboard() {
   }, [activeTab]);
 
   const fetchAppointments = async () => {
+    // debug cronometro início
+    console.time('Tempo da API - Agendamentos')
+
     try {
       const token = localStorage.getItem('@PortalSolidario:token');
       const API_URL = import.meta.env.VITE_API_URL;
@@ -288,6 +292,9 @@ function Dashboard() {
       }
     } catch (error) {
       console.error('Erro ao buscar agendamentos:', error);
+    } finally{
+      //debug cronometro fim
+      console.timeEnd('Tempo da API - Agendamentos')
     }
   };
 
