@@ -78,12 +78,17 @@ function App() {
 
         setFeedback({ message: 'Login realizado com sucesso!', isError: false });
         
-        // Logs de sucesso
+      // Logs de sucesso
         console.log('Token recebido e salvo:', data.token);
         console.log('Dados do usuário:', data.user);
 
-        // Redirecina para a primeira dela dentro da sessão autenticada
-        navigate('/dashboard');
+        // --- TRAVA DE SEGURANÇA: Intercepta se precisar mudar a senha ---
+        if (data.user.must_change_password) {
+          navigate('/definir-senha');
+        } else {
+          // Redireciona para o dashboard normalmente se não tiver trava
+          navigate('/dashboard');
+        }
       }
     } catch (error) {
       setFeedback({ message: error.message, isError: true });

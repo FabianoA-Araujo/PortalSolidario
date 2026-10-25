@@ -48,7 +48,8 @@ module.exports = {
           id: account.id,
           name: account.name,
           email: account.email,
-          role: role
+          role: role,
+          must_change_password: account.must_change_password
         }
       });
 

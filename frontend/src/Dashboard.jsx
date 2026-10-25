@@ -274,6 +274,10 @@ function Dashboard() {
     if (activeTab === 'management') {
       fetchStaff();
     }
+
+    if (activeTab === 'staff'){
+      fetchAllUsers();
+    }
   }, [activeTab]);
 
   const fetchAppointments = async () => {
@@ -494,6 +498,74 @@ const handleStaffAssign = async (appointmentId, staffId) => {
       }
     } catch (error) {
       console.error('Erro ao cancelar:', error);
+    }
+  };
+
+// Busca todos os usuários para a tabela de gestão (SuperAdmin)
+  const fetchAllUsers = async () => {
+    try {
+      const token = localStorage.getItem('@PortalSolidario:token');
+      const API_URL = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${API_URL}/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setStaffMembers(await response.json());
+      }
+    } catch (error) {
+      console.error('Erro ao buscar equipe:', error);
+    }
+  };
+
+  // Altera a Role
+  const handleChangeRole = async (userId, userName, newRole) => {
+    const confirm = window.confirm(`Tem certeza que deseja alterar o acesso de ${userName} para ${newRole}?`);
+    if (!confirm) return;
+
+    try {
+      const token = localStorage.getItem('@PortalSolidario:token');
+      const API_URL = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${API_URL}/users/${userId}/role`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ role: newRole })
+      });
+
+      if (response.ok) {
+        setStaffMembers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+      } else {
+        alert('Erro ao atualizar permissão.');
+      }
+    } catch (error) {
+      console.error('Erro ao mudar role:', error);
+    }
+  };
+
+  // Reseta a Senha
+  const handleResetPassword = async (userId, userName) => {
+    const confirm = window.confirm(`Gerar senha provisória para ${userName}? Isso forçará a troca no próximo login.`);
+    if (!confirm) return;
+
+    try {
+      const token = localStorage.getItem('@PortalSolidario:token');
+      const API_URL = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${API_URL}/users/${userId}/reset-password`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Alert com quebra de linha nativa para destacar a senha nova
+        alert(`Senha gerada com sucesso para ${userName}!\n\nSenha Provisória: ${data.tempPassword}\n\nCopie e envie esta senha para o usuário.`);
+      } else {
+        alert('Erro ao resetar senha.');
+      }
+    } catch (error) {
+      console.error('Erro ao resetar senha:', error);
     }
   };
 
@@ -1030,6 +1102,53 @@ return (
                   </button>
                 </div>
               </form>
+              {/* Lista de Membros da Equipe */}
+              <div className="bg-petroleo-800 rounded-lg border border-petroleo-700 shadow-lg overflow-hidden mt-8">
+                <table className="w-full text-left text-sm text-cinza-200">
+                  <thead className="bg-petroleo-900 text-cinza-400 border-b border-petroleo-700">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">Nome</th>
+                      <th className="px-6 py-4 font-medium">E-mail</th>
+                      <th className="px-6 py-4 font-medium">Nível de Acesso</th>
+                      <th className="px-6 py-4 font-medium text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-petroleo-700">
+                    {staffMembers.length === 0 ? (
+                      <tr>
+                        <td colSpan="4" className="px-6 py-8 text-center text-cinza-400">Nenhum membro encontrado.</td>
+                      </tr>
+                    ) : (
+                      staffMembers.map(member => (
+                        <tr key={member.id} className="hover:bg-petroleo-700/50 transition-colors">
+                          <td className="px-6 py-4 font-bold text-white">{member.name}</td>
+                          <td className="px-6 py-4">{member.email}</td>
+                          <td className="px-6 py-4">
+                            <select 
+                              value={member.role}
+                              onChange={(e) => handleChangeRole(member.id, member.name, e.target.value)}
+                              disabled={member.id === user.id} // Impede o SuperAdmin de rebaixar a si mesmo acidentalmente
+                              className="px-3 py-1.5 bg-petroleo-900 border border-petroleo-700 rounded-md text-white text-xs focus:outline-none focus:ring-2 focus:ring-petroleo-700 cursor-pointer disabled:opacity-50"
+                            >
+                              <option value="STAFF">STAFF</option>
+                              <option value="ADMIN">ADMIN</option>
+                              <option value="SUPERADMIN">SUPERADMIN</option>
+                            </select>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button 
+                              onClick={() => handleResetPassword(member.id, member.name)}
+                              className="text-yellow-400 hover:text-yellow-300 font-semibold px-3 py-1 bg-yellow-900/30 border border-yellow-800 rounded-md transition-colors"
+                            >
+                              Gerar Senha
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

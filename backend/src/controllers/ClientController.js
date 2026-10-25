@@ -38,5 +38,33 @@ module.exports = {
       console.error('Erro ao buscar clientes:', error);
       res.status(500).json({ error: 'Erro interno do servidor' });
     }
-  }
+  },
+
+  // Cliente atualiza a própria senha
+  async updatePassword(req, res) {
+    try {
+      const clientId = req.user.id; 
+      const { newPassword } = req.body;
+
+      const passwordRegex = /^(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).{6,}$/;
+
+      if (!newPassword || !passwordRegex.test(newPassword)) {
+        return res.status(400).json({ 
+          error: 'A senha deve ter no mínimo 6 caracteres, incluindo pelo menos uma letra maiúscula e um caractere especial (ex: @, #, !).' 
+        });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      await db.query(
+        'UPDATE clients SET password = $1 WHERE id = $2',
+        [hashedPassword, clientId]
+      );
+
+      res.json({ message: 'Senha atualizada com sucesso.' });
+    } catch (error) {
+      console.error('Erro ao atualizar senha do cliente:', error);
+      res.status(500).json({ error: 'Erro interno do servidor.' });
+    }
+  }  
 };

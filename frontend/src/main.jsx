@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
 import Dashboard from './Dashboard.jsx'
+import ResetPassword from './ResetPassword';
 import App from './App.jsx'
 
 createRoot(document.getElementById('root')).render(
@@ -11,6 +12,7 @@ createRoot(document.getElementById('root')).render(
       <Routes>
         <Route path="/" element={<App />} /> {/* Tela de Login */}
         <Route path="/dashboard" element={<Dashboard />} /> {/* Tela Interna */}
+        <Route path="/definir-senha" element={<ResetPassword />} /> {/* Tela de Redefinição de senha */}
       </Routes>
     </BrowserRouter>
   </StrictMode>,

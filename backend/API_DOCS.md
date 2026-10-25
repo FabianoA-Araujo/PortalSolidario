@@ -30,3 +30,11 @@ Esta documentação descreve os endpoints da API do Portal Solidário, seus resp
 | **GET** | `/api/appointments` | Lista a agenda. Se for cliente, vê apenas os seus. Se for equipe, vê o calendário geral. | Autenticado |
 | **PATCH** | `/api/appointments/:id/status` | Altera apenas o status (`PENDING`, `CONFIRMED`, `CANCELED`, `COMPLETED`). | Autenticado |
 | **PATCH** | `/api/appointments/:id/staff` | Atribui qual profissional (Staff) fará o atendimento daquela vaga. | Admin |
+
+### 5. Gestão de Usuários e Segurança (`users`)
+| Método | Endpoint | Descrição | Acesso |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/users` | Retorna a lista de membros da equipe cadastrados (usado para popular selects). | Admin |
+| **PATCH** | `/api/users/:id/role` | Altera o nível de acesso (`role`) de um membro da equipe. | SuperAdmin |
+| **PATCH** | `/api/users/:id/reset-password` | Gera uma senha provisória e ativa a obrigatoriedade de troca (`must_change_password`). | SuperAdmin |
+| **PATCH** | `/api/users/update-password` | Cadastra a nova senha definitiva do usuário e desativa a trava de redefinição. | Autenticado |
