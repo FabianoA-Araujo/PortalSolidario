@@ -67,6 +67,26 @@ function Dashboard() {
     return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
   };
 
+// Força a exibição da data e hora sempre no fuso de Brasília.
+  const formatDateBR = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    
+    const dayMonth = new Intl.DateTimeFormat('pt-BR', { 
+      timeZone: 'America/Sao_Paulo', 
+      day: '2-digit', 
+      month: 'long' 
+    }).format(date);
+
+    const time = new Intl.DateTimeFormat('pt-BR', { 
+      timeZone: 'America/Sao_Paulo', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    }).format(date);
+
+    return `${dayMonth} às ${time}`;
+  };
+
   // Busca os serviços automaticamente quando o Dashboard carrega
   useEffect(() => {
       const fetchData = async () => {
@@ -659,7 +679,7 @@ return (
             Sair
           </button>
         </div>
-        
+
         {/* Opção visível apenas para clientes */}
         {user.role === 'CLIENT' && (
           <div className="mb-6">
@@ -954,7 +974,7 @@ return (
                     appointments.map(app => (
                       <tr key={app.id} className="hover:bg-petroleo-700/50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {format(new Date(app.scheduled_at), "dd/MM/yyyy 'às' HH:mm")}
+                          {formatDateBR(app.scheduled_at)}
                         </td>
                         <td className="px-6 py-4">
                           <p className="font-bold text-white">{app.client_name}</p>
@@ -1028,7 +1048,7 @@ return (
                 appointments.filter(app => app.client_id === user.id).map(app => (
                   <div key={app.id} className="flex flex-col sm:flex-row justify-between items-center p-4 bg-petroleo-900 border border-petroleo-700 rounded-md">
                     <div>
-                      <p className="font-bold text-white capitalize">{format(new Date(app.scheduled_at), "dd 'de' MMMM 'às' HH:mm", { locale: ptBR })}</p>
+                      <p className="font-bold text-white capitalize">{formatDateBR(app.scheduled_at)}</p>
                       <p className="text-cinza-400 text-sm">{app.service_name}</p>
                       <span className={`inline-block mt-2 px-2 py-1 text-xs font-semibold rounded-md ${statusMap[app.status]?.color}`}>
                         {statusMap[app.status]?.label}
