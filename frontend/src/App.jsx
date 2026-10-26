@@ -43,7 +43,13 @@ function App() {
 
     try {
       if (!isLogin) {
-        // --- FLUXO DE CADASTRO ---
+        // --- FLUXO DE CADASTRO ---        
+        const passwordRegex = /^(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).{6,}$/;
+        if (!passwordRegex.test(password)) {
+          setFeedback({ message: 'A senha deve ter no mínimo 6 caracteres, incluindo pelo menos uma letra maiúscula e um caractere especial (ex: @, #, !).', isError: true });
+          return; // Interrompe o cadastro
+        }
+
         const response = await fetch(`${API_URL}/clients`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

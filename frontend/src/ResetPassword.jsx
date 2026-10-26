@@ -20,7 +20,7 @@ function ResetPassword() {
 
     const passwordRegex = /^(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).{6,}$/;
     if (!passwordRegex.test(newPassword)) {
-      return setError('A senha deve ter no mínimo 6 caracteres, incluindo uma letra maiúscula e um caractere especial.');
+      return setError('A senha deve ter no mínimo 6 caracteres, incluindo pelo menos uma letra maiúscula e um caractere especial (ex: @, #, !).');
     }
 
     try {

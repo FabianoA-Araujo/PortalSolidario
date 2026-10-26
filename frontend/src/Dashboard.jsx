@@ -46,7 +46,26 @@ function Dashboard() {
   const [staffFormName, setStaffFormName] = useState('');
   const [staffFormEmail, setStaffFormEmail] = useState('');
   const [staffFormPassword, setStaffFormPassword] = useState('');
-  const [staffFormRole, setStaffFormRole] = useState('STAFF')  
+  const [staffFormRole, setStaffFormRole] = useState('STAFF');
+  const [staffFormPhone, setStaffFormPhone] = useState ('')
+
+  // --- Estados para Alteração de Senha do Cliente ---
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [clientNewPassword, setClientNewPassword] = useState('');
+  const [clientConfirmPassword, setClientConfirmPassword] = useState('');
+  const [passwordFeedback, setPasswordFeedback] = useState({ message: '', type: '' });
+
+  // Função para formatar o telefone no padrão (XX) XXXXX-XXXX
+  const formatPhone = (value) => {
+    if (!value) return '';
+    // Remove tudo que não for número
+    const numbers = value.replace(/\D/g, '');
+    
+    // Aplica a máscara gradativamente
+    if (numbers.length <= 2) return `(${numbers}`;
+    if (numbers.length <= 7) return `(${numbers.slice(0, 2)}) ${numbers.slice(2)}`;
+    return `(${numbers.slice(0, 2)}) ${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+  };
 
   // Busca os serviços automaticamente quando o Dashboard carrega
   useEffect(() => {
@@ -357,6 +376,12 @@ function Dashboard() {
     try {
       const token = localStorage.getItem('@PortalSolidario:token');
       const API_URL = import.meta.env.VITE_API_URL;
+
+      const passwordRegex = /^(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).{6,}$/;
+      if (!passwordRegex.test(staffFormPassword)) {
+        alert('A senha deve ter no mínimo 6 caracteres, incluindo pelo menos uma letra maiúscula e um caractere especial (ex: @, #, !).');
+        return;
+      }
       
       const response = await fetch(`${API_URL}/users`, {
         method: 'POST',
@@ -368,7 +393,8 @@ function Dashboard() {
           name: staffFormName,
           email: staffFormEmail,
           password: staffFormPassword,
-          role: staffFormRole
+          role: staffFormRole,
+          phone: staffFormPhone
         })
       });
 
@@ -569,6 +595,53 @@ const handleStaffAssign = async (appointmentId, staffId) => {
     }
   };
 
+  // Função para o Cliente trocar a própria senha logado
+  const handleClientPasswordChange = async (e) => {
+    e.preventDefault();
+    setPasswordFeedback({ message: '', type: '' });
+
+    if (clientNewPassword !== clientConfirmPassword) {
+      return setPasswordFeedback({ message: 'As senhas não coincidem.', type: 'error' });
+    }
+
+    const passwordRegex = /^(?=.*[A-Z])(?=.*[^a-zA-Z0-9]).{6,}$/;
+    if (!passwordRegex.test(clientNewPassword)) {
+      return setPasswordFeedback({ message: 'A senha deve ter no mínimo 6 caracteres, 1 maiúscula e 1 caractere especial.', type: 'error' });
+    }
+
+    try {
+      const token = localStorage.getItem('@PortalSolidario:token');
+      const API_URL = import.meta.env.VITE_API_URL;
+      
+      const response = await fetch(`${API_URL}/clients/update-password`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ newPassword: clientNewPassword })
+      });
+
+      if (response.ok) {
+        setPasswordFeedback({ message: 'Senha atualizada com sucesso!', type: 'success' });
+        setClientNewPassword('');
+        setClientConfirmPassword('');
+        
+        // Fecha o formulário automaticamente após 3 segundos
+        setTimeout(() => {
+          setIsChangingPassword(false);
+          setPasswordFeedback({ message: '', type: '' });
+        }, 3000);
+      } else {
+        const data = await response.json();
+        setPasswordFeedback({ message: data.error || 'Erro ao atualizar a senha.', type: 'error' });
+      }
+    } catch (error) {
+      console.error('Erro:', error);
+      setPasswordFeedback({ message: 'Erro de conexão com o servidor.', type: 'error' });
+    }
+  };
+
 return (
     <div className="min-h-screen bg-petroleo-900 text-cinza-200 p-8">
       <div className="max-w-4xl mx-auto">
@@ -577,8 +650,8 @@ return (
         <div className="flex justify-between items-center bg-petroleo-800 p-6 rounded-lg shadow-lg border border-petroleo-700">
           <div>
             <h1 className="text-2xl font-bold text-white">Área Logada</h1>
-            <p className="text-cinza-400">Bem-vindo(a), {user?.name}</p>
-          </div>
+            <p className="text-cinza-400">Bem-vindo(a), {user?.name}!</p>
+          </div>          
           <button 
             onClick={handleLogout}
             className="bg-red-900/50 hover:bg-red-800 text-red-200 border border-red-800 font-semibold py-2 px-4 rounded-md transition duration-200"
@@ -586,6 +659,59 @@ return (
             Sair
           </button>
         </div>
+        
+        {/* Opção visível apenas para clientes */}
+        {user.role === 'CLIENT' && (
+          <div className="mb-6">
+            <button 
+              onClick={() => setIsChangingPassword(!isChangingPassword)}
+              className="text-sm font-medium text-cinza-400 hover:text-white transition-colors"
+            >
+              {isChangingPassword ? 'Cancelar alteração de senha' : '🔒 Alterar minha senha'}
+            </button>
+            
+            {isChangingPassword && (
+              <div className="mt-4 p-5 bg-petroleo-800 border border-petroleo-700 rounded-lg max-w-sm shadow-lg animate-fade-in">
+                <h3 className="text-white font-semibold mb-3">Definir Nova Senha</h3>
+                
+                {passwordFeedback.message && (
+                  <div className={`mb-3 p-2 rounded text-sm font-medium ${passwordFeedback.type === 'error' ? 'bg-red-900/50 text-red-200 border border-red-800' : 'bg-green-900/50 text-green-200 border border-green-800'}`}>
+                    {passwordFeedback.message}
+                  </div>
+                )}
+
+                <form onSubmit={handleClientPasswordChange} className="space-y-3">
+                  <div>
+                    <input 
+                      type="password" 
+                      placeholder="Nova senha"
+                      value={clientNewPassword}
+                      onChange={(e) => setClientNewPassword(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-petroleo-700 placeholder-cinza-500"
+                    />
+                  </div>
+                  <div>
+                    <input 
+                      type="password" 
+                      placeholder="Confirme a nova senha"
+                      value={clientConfirmPassword}
+                      onChange={(e) => setClientConfirmPassword(e.target.value)}
+                      required
+                      className="w-full px-3 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white text-sm focus:outline-none focus:ring-2 focus:ring-petroleo-700 placeholder-cinza-500"
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    className="w-full bg-petroleo-700 hover:bg-petroleo-600 border border-petroleo-600 text-white font-semibold py-2 px-4 rounded-md transition duration-200 text-sm mt-2"
+                  >
+                    Salvar Senha
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        )}        
         
         {/* --- Guias de navegação para admins */}
         {isAdmin && (
@@ -839,6 +965,7 @@ return (
                           <select 
                             value={app.user_id || ''}
                             onChange={(e) => handleStaffAssign(app.id, e.target.value)}
+                            disabled={app.status === 'CANCELED'}
                             className="w-full px-3 py-1.5 bg-petroleo-900 border border-petroleo-700 rounded-md text-white text-xs focus:outline-none focus:ring-2 focus:ring-petroleo-700 cursor-pointer"
                           >
                             <option value="">Não atribuído</option>
@@ -853,6 +980,7 @@ return (
                           <select 
                             value={app.status} 
                             onChange={(e) => handleStatusChange(app.id, e.target.value)}
+                            disabled={app.status === 'CANCELED'}
                             className={`px-3 py-1.5 rounded-md font-semibold text-xs border cursor-pointer focus:outline-none ${statusMap[app.status]?.color || statusMap['PENDING'].color}`}
                           >
                             {Object.keys(statusMap).map(key => (
@@ -1092,6 +1220,18 @@ return (
                     <option value="ADMIN">ADMIN (Gerencia agenda e bloqueios)</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-cinza-200 mb-1">Telefone</label>
+                  <input 
+                    type="text" 
+                    value={staffFormPhone}
+                    onChange={(e) => setStaffFormPhone(formatPhone(e.target.value))}
+                    required
+                    maxLength="15"
+                    placeholder="(00) 00000-0000"
+                    className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white"
+                  />
+                </div>                
                 
                 <div className="md:col-span-2 mt-4">
                   <button 

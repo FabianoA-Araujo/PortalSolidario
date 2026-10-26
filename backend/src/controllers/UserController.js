@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 module.exports = {
   async create(req, res) {
     try {
-      const { name, email, password, role } = req.body;
+      const { name, email, password, role, phone } = req.body;
 
       // Criptografa a senha do administrador/staff
       const salt = await bcrypt.genSalt(10);
@@ -12,8 +12,8 @@ module.exports = {
 
       // Insere no banco e retorna os dados sem a senha
       const result = await db.query(
-        'INSERT INTO users (name, email, password, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, created_at',
-        [name, email, hashedPassword, role]
+        'INSERT INTO users (name, email, password, role, phone) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, phone, created_at',
+        [name, email, hashedPassword, role, phone]
       );
 
       res.status(201).json(result.rows[0]);
@@ -104,7 +104,7 @@ module.exports = {
 
       if (!newPassword || !passwordRegex.test(newPassword)) {
         return res.status(400).json({ 
-          error: 'A senha deve ter no mínimo 6 caracteres, uma letra maiúscula e um caractere especial (ex: @, #, !).' 
+          error: 'A senha deve ter no mínimo 6 caracteres, incluindo pelo menos uma letra maiúscula e um caractere especial (ex: @, #, !).' 
         });
       }
       const hashedPassword = await bcrypt.hash(newPassword, 10);
