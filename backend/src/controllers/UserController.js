@@ -119,5 +119,18 @@ module.exports = {
       console.error('Erro ao atualizar senha:', error);
       res.status(500).json({ error: 'Erro interno do servidor.' });
     }
-  }  
+  },
+  
+// Busca contatos de SuperAdmin
+  async getAdminContacts(req, res) {
+    try {
+      const result = await db.query(
+        "SELECT name, email, phone FROM users WHERE role = 'SUPERADMIN'"
+      );
+      res.json(result.rows);
+    } catch (error) {
+      console.error('Erro ao buscar contatos:', error);
+      res.status(500).json({ error: 'Erro interno do servidor.' });
+    }
+  },
 };

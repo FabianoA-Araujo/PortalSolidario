@@ -10,6 +10,10 @@ function App() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+
+  // States para a recuperação de senha
+  const [adminContacts, setAdminContacts] = useState([]);
+  const [showContacts, setShowContacts] = useState(false);
   
   // States de sucesso ou erro
   const [feedback, setFeedback] = useState({ message: '', isError: false });
@@ -95,6 +99,27 @@ function App() {
     }
   };
 
+  // Função para buscar e exibir os contatos
+    const handleForgotPassword = async () => {
+    if (showContacts) {
+      setShowContacts(false);
+      return;
+    }
+    
+    try {
+      const API_URL = import.meta.env.VITE_API_URL;
+      const response = await fetch(`${API_URL}/users/contacts`); 
+      
+      if (response.ok) {
+        const data = await response.json();
+        setAdminContacts(data);
+        setShowContacts(true);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar contatos:', error);
+    }
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen px-4">
       <div className="w-full max-w-md bg-petroleo-800 rounded-lg shadow-2xl p-8 border border-petroleo-700">
@@ -158,7 +183,7 @@ function App() {
             </div>
           )}          
 
-          <div>
+<div>
             <label className="block text-sm font-medium text-cinza-200 mb-1">Senha</label>
             <input 
               type="password" 
@@ -169,6 +194,19 @@ function App() {
               placeholder="*******"
               className="w-full px-4 py-2 bg-petroleo-900 border border-petroleo-700 rounded-md text-white placeholder-cinza-400 focus:outline-none focus:ring-2 focus:ring-petroleo-700"
             />
+            
+            {/* NOVO: Botão Esqueceu a Senha */}
+            {isLogin && (
+              <div className="text-right mt-1">
+                <button 
+                  type="button" 
+                  onClick={handleForgotPassword}
+                  className="text-xs text-cinza-400 hover:text-white transition-colors"
+                >
+                  Esqueceu a senha?
+                </button>
+              </div>
+            )}
           </div>
 
           <button 
@@ -178,6 +216,28 @@ function App() {
             {isLogin ? 'Entrar no Sistema' : 'Cadastrar'}
           </button>
         </form>
+
+        {/* NOVO: Caixa de exibição dos contatos FICA FORA DO FORMULÁRIO */}
+        {showContacts && isLogin && (
+          <div className="mt-4 p-4 bg-petroleo-900 border border-petroleo-700 rounded-md text-sm text-center">
+            <p className="text-cinza-300 mb-3">
+              Para redefinir sua senha, entre em contato com a administração:
+            </p>
+            <div className="space-y-2">
+              {adminContacts.length > 0 ? (
+                adminContacts.map((admin, index) => (
+                  <div key={index} className="text-white font-medium bg-petroleo-800 py-2 px-3 rounded border border-petroleo-700">
+                    {admin.name} <br/>
+                    <span className="text-cinza-400 text-xs">{admin.email}</span>
+                    <span className="text-cinza-400 text-xs ml-3">{admin.phone}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-red-400">Nenhum administrador encontrado.</p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="mt-6 text-center text-sm">
           <span className="text-cinza-400">
