@@ -425,8 +425,6 @@ function Dashboard() {
         setStaffFormEmail('');
         setStaffFormPassword('');
         setStaffFormRole('STAFF');
-        
-        // Se o seu backend tiver uma rota GET /users, poderíamos chamar uma função fetchStaff() aqui para atualizar a tabela.
       } else {
         const data = await response.json();
         alert(data.error || 'Erro ao cadastrar membro da equipe.');

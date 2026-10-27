@@ -11,7 +11,15 @@ const appointmentsRoutes = require('./routes/appointmentRoutes');
 const app = express();
 
 // Middlewares
-app.use(cors());
+app.use(cors({
+  origin: [
+    'https://salaodadu.com.br',
+    'https://www.salaodadu.com.br',
+    'http://localhost:5173'
+  ]
+}));
+
+app.use(express.json());
 app.use(express.json());
 
 // Conectando as rotas na API
