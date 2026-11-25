@@ -66,5 +66,33 @@ module.exports = {
       console.error('Erro ao atualizar senha do cliente:', error);
       res.status(500).json({ error: 'Erro interno do servidor.' });
     }
-  }  
+  },
+
+  // Para o SuperAdmin resetar a senha do cliente
+  async resetPassword(req, res) {
+    try {
+      const { id } = req.params;
+
+      const tempPassword = 'Mudar@123';
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+      const result = await db.query(
+        'UPDATE clients SET password = $1, must_change_password = true WHERE id = $2 RETURNING id, name, email',
+        [hashedPassword, id]
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'Cliente não encontrado.' });
+      }
+
+      res.json({
+        message: 'Senha resetada com sucesso.',
+        tempPassword: tempPassword,
+        client: result.rows[0]
+      });
+    } catch (error) {
+      console.error('Erro ao resetar senha do cliente:', error);
+      res.status(500).json({ error: 'Erro interno do servidor.' });
+    }
+  },
 };

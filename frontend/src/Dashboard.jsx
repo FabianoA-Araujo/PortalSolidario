@@ -545,19 +545,27 @@ const handleStaffAssign = async (appointmentId, staffId) => {
     }
   };
 
-// Busca todos os usuários para a tabela de gestão (SuperAdmin)
+  // Busca todos os usuários e clientes para a tabela de gestão (SuperAdmin)
   const fetchAllUsers = async () => {
     try {
       const token = localStorage.getItem('@PortalSolidario:token');
       const API_URL = import.meta.env.VITE_API_URL;
-      const response = await fetch(`${API_URL}/users`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (response.ok) {
-        setStaffMembers(await response.json());
-      }
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      const [resUsers, resClients] = await Promise.all([
+        fetch(`${API_URL}/users`, { headers }),
+        fetch(`${API_URL}/clients`, { headers })
+      ]);
+
+      const usersData = resUsers.ok ? await resUsers.json() : [];
+      const clientsData = resClients.ok ? await resClients.json() : [];
+
+      const formattedUsers = usersData.map(u => ({ ...u, type: 'USER' }));
+      const formattedClients = clientsData.map(c => ({ ...c, role: 'CLIENT', type: 'CLIENT' }));
+
+      setStaffMembers([...formattedUsers, ...formattedClients]);
     } catch (error) {
-      console.error('Erro ao buscar equipe:', error);
+      console.error('Erro ao buscar pessoas:', error);
     }
   };
 
@@ -589,14 +597,18 @@ const handleStaffAssign = async (appointmentId, staffId) => {
   };
 
   // Reseta a Senha
-  const handleResetPassword = async (userId, userName) => {
-    const confirm = window.confirm(`Gerar senha provisória para ${userName}? Isso forçará a troca no próximo login.`);
+  const handleResetPassword = async (memberId, memberName, memberType) => {
+    const confirm = window.confirm(`Gerar senha provisória para ${memberName}? Isso forçará a troca no próximo login.`);
     if (!confirm) return;
 
     try {
       const token = localStorage.getItem('@PortalSolidario:token');
       const API_URL = import.meta.env.VITE_API_URL;
-      const response = await fetch(`${API_URL}/users/${userId}/reset-password`, {
+      const endpoint = memberType === 'CLIENT'
+        ? `${API_URL}/clients/${memberId}/reset-password`
+        : `${API_URL}/users/${memberId}/reset-password`;
+
+      const response = await fetch(endpoint, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -604,7 +616,7 @@ const handleStaffAssign = async (appointmentId, staffId) => {
       if (response.ok) {
         const data = await response.json();
         // Alert com quebra de linha nativa para destacar a senha nova
-        alert(`Senha gerada com sucesso para ${userName}!\n\nSenha Provisória: ${data.tempPassword}\n\nCopie e envie esta senha para o usuário.`);
+        alert(`Senha gerada com sucesso para ${memberName}!\n\nSenha Provisória: ${data.tempPassword}\n\nCopie e envie esta senha para o usuário.`);
       } else {
         alert('Erro ao resetar senha.');
       }
@@ -757,7 +769,7 @@ return (
                 onClick={() => setActiveTab('staff')}
                 className={`font-semibold pb-2 px-4 border-b-2 transition-colors ${activeTab === 'staff' ? 'border-cinza-200 text-white' : 'border-transparent text-cinza-400 hover:text-cinza-200'}`}
               >
-                Gestão de Equipe
+                Gestão de Pessoas
               </button>
             )}  
           </div>
@@ -1278,24 +1290,30 @@ return (
                       </tr>
                     ) : (
                       staffMembers.map(member => (
-                        <tr key={member.id} className="hover:bg-petroleo-700/50 transition-colors">
+                        <tr key={`${member.type}-${member.id}`} className="hover:bg-petroleo-700/50 transition-colors">
                           <td className="px-6 py-4 font-bold text-white">{member.name}</td>
                           <td className="px-6 py-4">{member.email}</td>
                           <td className="px-6 py-4">
-                            <select 
-                              value={member.role}
-                              onChange={(e) => handleChangeRole(member.id, member.name, e.target.value)}
-                              disabled={member.id === user.id} // Impede o SuperAdmin de rebaixar a si mesmo acidentalmente
-                              className="px-3 py-1.5 bg-petroleo-900 border border-petroleo-700 rounded-md text-white text-xs focus:outline-none focus:ring-2 focus:ring-petroleo-700 cursor-pointer disabled:opacity-50"
-                            >
-                              <option value="STAFF">STAFF</option>
-                              <option value="ADMIN">ADMIN</option>
-                              <option value="SUPERADMIN">SUPERADMIN</option>
-                            </select>
+                            {member.type === 'CLIENT' ? (
+                              <span className="px-3 py-1.5 bg-petroleo-900 border border-petroleo-700 rounded-md text-cinza-400 text-xs font-semibold">
+                                CLIENT
+                              </span>
+                            ) : (
+                              <select 
+                                value={member.role}
+                                onChange={(e) => handleChangeRole(member.id, member.name, e.target.value)}
+                                disabled={member.id === user.id}
+                                className="px-3 py-1.5 bg-petroleo-900 border border-petroleo-700 rounded-md text-white text-xs focus:outline-none focus:ring-2 focus:ring-petroleo-700 cursor-pointer disabled:opacity-50"
+                              >
+                                <option value="STAFF">STAFF</option>
+                                <option value="ADMIN">ADMIN</option>
+                                <option value="SUPERADMIN">SUPERADMIN</option>
+                              </select>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-right">
                             <button 
-                              onClick={() => handleResetPassword(member.id, member.name)}
+                              onClick={() => handleResetPassword(member.id, member.name, member.type)}
                               className="text-yellow-400 hover:text-yellow-300 font-semibold px-3 py-1 bg-yellow-900/30 border border-yellow-800 rounded-md transition-colors"
                             >
                               Gerar Senha
